@@ -134,6 +134,10 @@ a{color:var(--accent)}
 .teach .th{font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--accent);display:flex;gap:8px;align-items:center}
 .teach .tip{font-size:13.5px;margin-top:9px}
 .teach .formula{margin-bottom:0}
+.learn{display:grid;gap:9px;margin-top:13px}
+.learn > div{font-size:13.5px;line-height:1.5}
+.learn .lb{display:inline-block;font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:700;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1.5px 7px;margin-right:8px;vertical-align:middle}
+.learn .lb.hint{color:var(--warn);border-color:transparent;background:var(--warn-soft)}
 .reminder{display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:12.5px;background:var(--accent-soft);color:var(--accent);border-radius:9px;padding:8px 11px;margin-top:14px;overflow-x:auto;white-space:nowrap}
 .dg{display:block;margin:10px auto 2px;max-width:100%;height:auto}
 .dg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
@@ -273,6 +277,72 @@ const LESSONS={
   6:{title:"Read the kernel's shape",d:DG.decision(),f:"sum→1 center-heavy = sharpen · sum→1 equal = blur · sum→0 = edge"},
   7:{title:"Cost of a convolution",d:DG.cost(),f:"naïve O(K²) · separable O(2K) · FFT O(log N) per pixel"},
   8:{title:"Scale space & pyramids",d:DG.pyramid(),f:"blur then halve · level n side = N/2ⁿ · DoG ≈ Laplacian-of-Gaussian"}
+};
+/* per-question study cards: what it is · where it's used · exam hint */
+const LEARN={
+  "1-0":{what:"An all-ones kernel with no division — it just <b>sums</b> the pixels under it.",when:"The raw add step inside every filter; divide it by the pixel count and it becomes a box blur.",hint:"No normalization here, so don't divide — just add the four products."},
+  "1-1":{what:"A first-difference kernel [1, 0, −1]: right pixel minus left pixel.",when:"The simplest 1-D edge/gradient detector — it measures change across a row.",hint:"The middle weight is 0, so the center pixel never counts. The sign shows edge direction."},
+  "1-2":{what:"The <b>identity</b> kernel: 1 in the center, 0 everywhere else.",when:"A no-op baseline, and the central term you add to a Laplacian to build a sharpen kernel.",hint:"Output = the center pixel, unchanged. Lone central 1 ⇒ answer is the middle value."},
+  "1-3":{what:"A single-1 kernel that <b>selects</b> one position instead of blending.",when:"Shifting/translating an image, or picking a neighbour — how kernel position maps to output.",hint:"A lone 1 just copies the pixel beneath it. Find which slot holds the 1."},
+  "1-4":{what:"A <b>box-average</b> kernel: every weight is 1/K², so it averages the neighbourhood equally.",when:"Fast, cheap smoothing and noise reduction — the blunt cousin of the Gaussian blur.",hint:"Averaging equal values returns that value. On a flat region, blur changes nothing."},
+  "1-5":{what:"A Laplacian-style kernel: positive center, negative surround, weights summing to 0.",when:"Edge and detail detection — it responds to change, not to flat areas.",hint:"A sum-to-zero kernel gives 0 on any constant patch. Memorize: flat region → 0."},
+  "1-boss":{what:"The <b>sharpen</b> kernel: identity + Laplacian (center 5, −1 neighbours), total 1.",when:"Boosting local contrast / crisping edges without changing overall brightness.",hint:"Center × 5, then subtract the four edge neighbours. Corners are 0 — don't add them."},
+
+  "2-0":{what:"<b>'Valid'</b> convolution: the kernel only sits where it fully overlaps the image.",when:"The default when you don't pad; each layer shrinks the map by K−1.",hint:"Valid size = N − K + 1, with stride 1 and no padding."},
+  "2-1":{what:"The same valid-size rule on a larger image.",when:"Tracking how feature-map size falls through a CNN.",hint:"N − K + 1 = 100 − 5 + 1. A 5-wide kernel trims 4 total (2 per side)."},
+  "2-2":{what:"<b>'Same'</b> padding: add a border so the output matches the input size.",when:"Keeping spatial dimensions constant across layers (most modern CNNs).",hint:"Odd K, stride 1 ⇒ P = (K−1)/2. K = 5 → 2."},
+  "2-3":{what:"<b>Strided</b> convolution: step by S > 1, downsampling as you filter.",when:"Reducing resolution without a separate pooling layer.",hint:"O = ⌊(N−K)/S⌋ + 1. Don't forget the FLOOR: ⌊2.5⌋ = 2."},
+  "2-4":{what:"<b>Border handling</b>: what to do where the kernel overhangs the edge.",when:"Every real filter needs it; replicate avoids the dark rim that zero-padding leaves.",hint:"Replicate = clamp = repeat the edge pixel. Reflect mirrors; wrap is circular."},
+  "2-5":{what:"The size rule in 1-D (signals, audio).",when:"The same formula works in any number of dimensions.",hint:"length − K + 1 = 10 − 4 + 1 = 7."},
+  "2-boss":{what:"The full size formula with padding AND stride together — the ResNet stem.",when:"Designing the first downsampling layer of a deep network.",hint:"⌊(N+2P−K)/S⌋+1. Top first: 224+6−7 = 223, ⌊223/2⌋ = 111, +1 = 112."},
+
+  "3-0":{what:"<b>Convolution</b> = flip the kernel 180°, then slide-multiply-add.",when:"Whenever the math must be commutative/associative — signal processing, proofs.",hint:"The only difference from correlation is the flip. Think 'flip, then slide.'"},
+  "3-1":{what:"A 180° rotation swaps opposite corners (top-left ↔ bottom-right).",when:"Computing a true convolution by hand.",hint:"Reverse rows AND columns — it's the grid read backwards."},
+  "3-2":{what:"<b>Symmetric</b> kernels are unchanged by the flip.",when:"Blur, Gaussian, Laplacian — the flip does nothing, so conv = correlation.",hint:"If flipping leaves the kernel identical, the two operations match. Check for symmetry."},
+  "3-3":{what:"Convolving an impulse (a lone 1) returns the kernel itself — its 'impulse response'.",when:"Defining what a linear filter does; systems theory.",hint:"Conv's flip cancels the impulse's flip → an unflipped copy. Correlation would flip it."},
+  "3-4":{what:"Framework 'conv' layers skip the flip — they are really cross-correlation.",when:"Every CNN; the weights are learned, so the flip is irrelevant.",hint:"Classic trick question: deep-learning 'convolution' = correlation."},
+  "3-5":{what:"True convolution is commutative and associative.",when:"Reordering or merging filters (e.g. combining two blurs into one).",hint:"Conv: yes. Correlation: no. The flip is what buys commutativity."},
+  "3-boss":{what:"Hand-computing a convolution: flip first, then multiply-add.",when:"Any by-hand convolution problem.",hint:"Flip [[1,0],[0,0]] → [[0,0],[0,1]], THEN correlate. Skipping the flip gives 1 (wrong)."},
+
+  "4-0":{what:"A <b>box-average</b> kernel: all K² weights equal to 1/K².",when:"Fast, cheap smoothing / noise reduction when quality isn't critical.",hint:"3×3 averages 9 pixels → each weight 1/9 ≈ 0.111. The weights must total 1."},
+  "4-1":{what:"<b>Normalization</b>: scaling the weights so they sum to 1.",when:"Any blur — otherwise the whole image brightens or darkens.",hint:"Blur weights sum to 1 ⇒ brightness preserved. Sum ≠ 1 means an edge/scaling kernel."},
+  "4-2":{what:"A box blur over a constant region.",when:"Seeing why blur only acts where pixels differ.",hint:"Average of identical values = that value. Flat → unchanged."},
+  "4-3":{what:"The smallest <b>Gaussian</b>, [1,2,1]; its normalizer is the sum of weights.",when:"Smooth, natural blur with far less ringing than a box.",hint:"Divide by the weight sum: 1 + 2 + 1 = 4. Always normalize before applying."},
+  "4-4":{what:"Gaussian's smooth falloff vs the box's hard cutoff.",when:"Choosing a blur: Gaussian for quality, box for raw speed.",hint:"Gaussian = less ringing and haloing. Box leaves blocky artifacts."},
+  "4-5":{what:"<b>Separability</b>: a 2-D Gaussian = one horizontal 1-D pass × one vertical pass.",when:"Speeding up large blurs (K² multiplies drop to 2K).",hint:"'Separable' is the keyword. A kernel is separable exactly when its matrix has rank 1."},
+  "4-boss":{what:"Applying a normalized 1-D Gaussian [1,2,1]/4.",when:"The core blur computation.",hint:"(1·100 + 2·200 + 1·100)/4. Multiply by weights, sum, THEN divide by 4."},
+
+  "5-0":{what:"Derivative kernels have weights that sum to <b>zero</b>.",when:"All edge detectors — Sobel, Prewitt, Laplacian.",hint:"Sum = 0 ⇒ no response on flat regions. A fast sanity check for any edge kernel."},
+  "5-1":{what:"A Sobel filter over a constant region.",when:"Confirming an edge detector ignores uniform areas.",hint:"No intensity change = no gradient = 0 — same idea as the zero-sum rule."},
+  "5-2":{what:"<b>Gradient magnitude</b> combines the two directional gradients.",when:"Turning Gx and Gy into one edge-strength image.",hint:"√(Gx² + Gy²). The 3-4-5 triangle → 5. Learn the common Pythagorean triples."},
+  "5-3":{what:"Sobel-X differences the left vs right columns.",when:"Detecting vertical edges (horizontal intensity change).",hint:"Negatives left, positives right → vertical edges. Sobel-Y is its transpose."},
+  "5-4":{what:"The <b>Laplacian</b>: second derivative, center −4 balancing four +1 neighbours.",when:"Edge detection via zero-crossings and detail enhancement.",hint:"Center = −(sum of neighbours) so it totals 0. Four neighbours → −4."},
+  "5-5":{what:"A 1-D gradient [−1, 0, 1]: right minus left.",when:"The directional core of Sobel.",hint:"−1·left + 1·right. Positive = a brightening edge; magnitude = edge strength."},
+  "5-boss":{what:"Full 2-D Sobel-Y on a patch with a strong horizontal edge.",when:"Measuring vertical gradients / horizontal edges.",hint:"Top row ×(−1,−2,−1), bottom ×(1,2,1), middle = 0. Sum all nine products."},
+
+  "6-0":{what:"The <b>identity</b> kernel.",when:"A no-op baseline.",hint:"Lone central 1, rest 0 → copies the image."},
+  "6-1":{what:"A <b>box blur</b> (all ones ÷ 9).",when:"Averaging / smoothing.",hint:"All-equal weights, sum to 1 → blur."},
+  "6-2":{what:"A <b>sharpen</b> kernel (center 5, −1 edges).",when:"Local contrast boost.",hint:"Center-heavy and sums to 1 → sharpen."},
+  "6-3":{what:"A <b>Sobel-X</b> edge kernel.",when:"Vertical-edge detection.",hint:"Left−right split, sums to 0 → gradient/edge."},
+  "6-4":{what:"An <b>emboss</b> kernel (diagonal −…+ ramp).",when:"A 3-D 'lit from one side' relief effect.",hint:"An asymmetric diagonal ramp → emboss."},
+  "6-5":{what:"A <b>Laplacian</b> kernel (center −4).",when:"Edges / detail via zero-crossings.",hint:"Center negative, neighbours +1, sums to 0 → Laplacian edge."},
+  "6-boss":{what:"An aggressive <b>sharpen</b> (center 9, eight −1s, total 1).",when:"Strong crisping.",hint:"Sum = 9 − 8 = 1 and center-heavy → sharpen, not blur."},
+
+  "7-0":{what:"<b>Naïve</b> cost: K² multiplies per output pixel.",when:"The baseline before you optimize.",hint:"Per pixel = K². A 5×5 kernel → 25."},
+  "7-1":{what:"<b>Separable</b> cost: two 1-D passes = 2K per pixel.",when:"Gaussian / box blur speedups.",hint:"2K, not K². 5 → 10."},
+  "7-2":{what:"The separable speedup factor = K²/(2K) = K/2.",when:"Deciding whether separating is worth it (bigger K = bigger win).",hint:"K/2 = 11/2 = 5.5."},
+  "7-3":{what:"The <b>convolution theorem</b>: convolution in space = multiplication in frequency.",when:"FFT-based filtering.",hint:"Keyword is 'multiplication'. Space-convolve ↔ frequency-multiply."},
+  "7-4":{what:"FFT convolution is O(N² log N), independent of kernel size.",when:"Very large kernels.",hint:"Large K → FFT wins. Small K → direct or separable."},
+  "7-5":{what:"Separable ⇔ the kernel matrix has <b>rank 1</b> (an outer product of two vectors).",when:"Testing whether a kernel can be split.",hint:"Rank 1 = separable. The Gaussian qualifies."},
+  "7-boss":{what:"Separable vs naïve savings for a large kernel.",when:"Justifying separable filters.",hint:"225 / 30 = 7.5. The ratio is K/2 = 15/2."},
+
+  "8-0":{what:"<b>Anti-alias</b> (low-pass) blur before downsampling.",when:"Any resize-down or pyramid construction.",hint:"Blur first to remove high frequencies → prevents aliasing."},
+  "8-1":{what:"A <b>Gaussian pyramid</b>: blur, then halve, each level.",when:"Multi-scale analysis and coarse-to-fine search.",hint:"Each level halves each dimension → factor 2."},
+  "8-2":{what:"The <b>Difference of Gaussians</b> approximates the Laplacian-of-Gaussian.",when:"Blob detection — the heart of SIFT keypoints.",hint:"DoG ≈ LoG. Subtract two blurs for a band-pass blob detector."},
+  "8-3":{what:"<b>Scale</b>: σ controls how much structure you see.",when:"Scale-space; finding features at the right size.",hint:"Bigger σ = more blur = coarser, larger structures."},
+  "8-4":{what:"Pyramid level sizes follow N / 2ⁿ.",when:"Indexing a specific pyramid level.",hint:"256 → 128 → 64 → 32. Level 3 = 256/2³ = 32."},
+  "8-5":{what:"<b>Aliasing</b>: high frequencies folding into false low-frequency patterns.",when:"The artifact you avoid by blurring before downsampling.",hint:"It looks like moiré / false patterns, caused by undersampling."},
+  "8-boss":{what:"Total pyramid storage = the series 1 + 1/4 + 1/16 + … = 4/3.",when:"The memory cost of a full pyramid.",hint:"Sum of 1/4ⁿ = 4/3 → only about 33% more than the base image."}
 };
 
 /* ---------- curriculum ---------- */
@@ -746,12 +816,18 @@ function renderWorld(){
 function teachHtml(worldNum,id,isBoss){
   const L=LESSONS[worldNum];const w=WORLDS[worldNum-1];
   const q=id==="boss"?w.boss:w.challenges[+id.slice(2)];
+  const Lrn=LEARN[worldNum+"-"+(isBoss?"boss":id.slice(2))];
+  const learnBlock=Lrn?`<div class="learn">
+      <div><span class="lb">What it is</span>${Lrn.what}</div>
+      <div><span class="lb">Where it's used</span>${Lrn.when}</div>
+      <div><span class="lb hint">Exam hint</span>${Lrn.hint}</div>
+    </div>`:(q.tip?`<div class="tip">${q.tip}</div>`:'');
   return `<div class="qtag" style="margin-top:14px;color:${isBoss?'var(--warn)':'var(--accent)'}">${isBoss?'★ Boss — refresh first':'Learn first'}${!isBoss&&q.tag?' · '+esc(q.tag):''}</div>
     <div class="teach">
       <div class="th">📖 ${esc(L.title)}</div>
       ${L.d}
       <div class="formula">${L.f}</div>
-      ${q.tip?`<div class="tip">${q.tip}</div>`:''}
+      ${learnBlock}
     </div>
     <div class="row" style="margin-top:14px;justify-content:flex-end">
       <button class="btn" data-act="reveal" data-id="${id}" data-w="${worldNum}">I'm ready — test me →</button>
