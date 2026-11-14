@@ -1,0 +1,1023 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Kernel Quest</title>
+<style>
+/* Layout: sticky clock bar + centered single-column campaign; map is a tile grid.
+   Palette: cool neutrals, indigo-violet accent, green/red/amber for feedback.
+   Type: Space Grotesk display, Inter body, system mono for kernels. */
+:root{
+  --bg:#f3f4fb; --surface:#ffffff; --surface-2:#ebedf7; --surface-3:#e1e4f3;
+  --fg:#191a27; --muted:#595f78; --faint:#8b90a8;
+  --border:#d7dae9; --border-2:#c4c8de;
+  --accent:#5847e3; --accent-2:#7a6bff; --accent-soft:#e9e6ff;
+  --good:#1f9d55; --good-soft:#dcf5e6; --bad:#d63d4a; --bad-soft:#fbe2e4; --warn:#b06a00; --warn-soft:#fbeccf;
+  --cell:#f7f8fd; --cell-border:#cfd3e6;
+  --radius:14px; --shadow:0 1px 2px rgba(25,26,39,.06),0 8px 24px rgba(25,26,39,.06);
+  --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0c0d15; --surface:#161827; --surface-2:#1e2133; --surface-3:#272b42;
+  --fg:#eceefb; --muted:#9ea4c2; --faint:#737a9b;
+  --border:#2a2e46; --border-2:#3a3f5e;
+  --accent:#8b7bff; --accent-2:#a897ff; --accent-soft:#241f45;
+  --good:#3ddc84; --good-soft:#133524; --bad:#ff6670; --bad-soft:#3a1a1f; --warn:#f0a93c; --warn-soft:#3a2a10;
+  --cell:#1b1e30; --cell-border:#343a56;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0c0d15; --surface:#161827; --surface-2:#1e2133; --surface-3:#272b42;
+  --fg:#eceefb; --muted:#9ea4c2; --faint:#737a9b;
+  --border:#2a2e46; --border-2:#3a3f5e;
+  --accent:#8b7bff; --accent-2:#a897ff; --accent-soft:#241f45;
+  --good:#3ddc84; --good-soft:#133524; --bad:#ff6670; --bad-soft:#3a1a1f; --warn:#f0a93c; --warn-soft:#3a2a10;
+  --cell:#1b1e30; --cell-border:#343a56;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.4);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--fg);
+  font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:40;background:var(--surface)}
+h1,h2,h3,.disp{font-family:"Space Grotesk","Inter",system-ui,sans-serif;text-wrap:balance}
+a{color:var(--accent)}
+.clockbar{
+  position:sticky; top:env(safe-area-inset-top,0px); z-index:30;
+  background:var(--surface); border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  padding-block:9px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.brand{font-family:"Space Grotesk",sans-serif;font-weight:700;letter-spacing:-.02em;font-size:16px;display:flex;align-items:center;gap:8px;margin-right:auto}
+.brand .px{display:inline-grid;grid-template-columns:repeat(3,5px);grid-auto-rows:5px;gap:1px}
+.brand .px i{background:var(--accent);border-radius:1px}
+.brand .px i.d{background:var(--border-2)}
+.clk{display:flex;flex-direction:column;line-height:1.1;font-variant-numeric:tabular-nums}
+.clk b{font-family:"Space Grotesk",sans-serif;font-size:15px}
+.clk span{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint)}
+.clk.left b{color:var(--accent)}
+.clk.over b{color:var(--bad)}
+.tbtn{background:var(--surface-2);border:1px solid var(--border);color:var(--fg);border-radius:9px;width:34px;height:34px;cursor:pointer;font-size:15px;display:grid;place-items:center}
+.tbtn:hover{border-color:var(--border-2)}
+.wrap{
+  max-width:760px; margin:0 auto;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:22px 72px;
+}
+/* buttons */
+.btn{font:inherit;font-weight:600;cursor:pointer;border-radius:11px;padding:11px 18px;border:1px solid var(--accent);background:var(--accent);color:#fff;transition:transform .05s ease}
+.btn:hover{filter:brightness(1.05)}
+.btn:active{transform:translateY(1px)}
+.btn.sec{background:var(--surface);color:var(--fg);border-color:var(--border-2)}
+.btn.sec:hover{background:var(--surface-2)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:8px 10px}
+.btn.ghost:hover{color:var(--fg)}
+.btn.sm{padding:7px 12px;font-size:13px;border-radius:9px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.spread{justify-content:space-between}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)}
+.pill.good{background:var(--good-soft);color:var(--good);border-color:transparent}
+.pill.warn{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pill.acc{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.muted{color:var(--muted)}
+.faint{color:var(--faint)}
+/* hero */
+.hero{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;border-radius:18px;padding:26px 24px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+.hero h1{margin:0 0 6px;font-size:clamp(28px,7vw,40px);letter-spacing:-.03em;line-height:1.02}
+.hero p{margin:0;max-width:46ch;color:rgba(255,255,255,.92)}
+.hero .tag{font-size:12px;text-transform:uppercase;letter-spacing:.14em;font-weight:700;opacity:.85}
+.hero .scan{position:absolute;right:-10px;top:-10px;width:150px;height:150px;opacity:.28;display:grid;grid-template-columns:repeat(6,1fr);gap:3px}
+.hero .scan i{background:#fff;border-radius:2px}
+.plan{margin-top:14px;display:flex;gap:16px;flex-wrap:wrap}
+.plan div{display:flex;flex-direction:column}
+.plan b{font-family:"Space Grotesk",sans-serif;font-size:20px}
+.plan span{font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.8}
+/* map */
+.maptiles{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:16px}
+@media(max-width:470px){.maptiles{grid-template-columns:1fr}}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px;cursor:pointer;text-align:left;font:inherit;color:inherit;display:flex;gap:12px;align-items:flex-start;box-shadow:var(--shadow);transition:border-color .12s,transform .06s}
+.tile:hover{border-color:var(--accent);transform:translateY(-1px)}
+.tile .no{width:38px;height:38px;flex:none;border-radius:10px;background:var(--surface-2);display:grid;place-items:center;font-family:"Space Grotesk",sans-serif;font-weight:700;font-size:17px;color:var(--accent)}
+.tile.done .no{background:var(--good-soft);color:var(--good)}
+.tile.exam{grid-column:1/-1;border-style:dashed}
+.tile h3{margin:0 0 2px;font-size:16px;letter-spacing:-.01em}
+.tile .sub{font-size:12.5px;color:var(--muted)}
+.tile .meta{margin-left:auto;text-align:right;flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.tile .bud{font-size:12px;font-weight:600;color:var(--faint);font-variant-numeric:tabular-nums}
+.check{color:var(--good);font-weight:700}
+/* cards */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.card + .card{margin-top:14px}
+.whead{display:flex;gap:12px;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap}
+.whead h2{margin:0;font-size:22px;letter-spacing:-.02em}
+.progressbar{height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden;margin:14px 0 4px}
+.progressbar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+.story p{margin:0 0 10px}
+.story p:last-child{margin-bottom:0}
+.kbox{display:flex;gap:18px;flex-wrap:wrap;align-items:center;justify-content:center;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:16px;margin:14px 0}
+.kgroup{display:flex;flex-direction:column;align-items:center;gap:7px}
+.kgroup .lab{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:700}
+.mat{display:inline-grid;gap:3px;background:var(--cell-border);padding:3px;border-radius:7px}
+.mat .r{display:grid;grid-auto-flow:column;gap:3px}
+.mat b{display:grid;place-items:center;min-width:34px;height:34px;padding:0 4px;background:var(--cell);border-radius:4px;font-family:var(--mono);font-size:13px;font-weight:600;font-variant-numeric:tabular-nums}
+.mat.hl b.c{background:var(--accent-soft);color:var(--accent)}
+.op{font-size:22px;color:var(--muted);font-weight:700}
+.formula{font-family:var(--mono);background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:11px 13px;margin:12px 0;font-size:13.5px;overflow-x:auto;white-space:nowrap}
+.formula .n{color:var(--muted);white-space:normal;display:block;font-family:"Inter",sans-serif;font-size:12px;margin-top:5px}
+/* mini-lesson / teach */
+.teach{background:var(--surface-2);border:1px solid var(--border);border-left:3px solid var(--accent-2);border-radius:12px;padding:14px 15px;margin-top:14px}
+.teach .th{font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--accent);display:flex;gap:8px;align-items:center}
+.teach .tip{font-size:13.5px;margin-top:9px}
+.teach .formula{margin-bottom:0}
+.reminder{display:flex;gap:8px;align-items:center;font-family:var(--mono);font-size:12.5px;background:var(--accent-soft);color:var(--accent);border-radius:9px;padding:8px 11px;margin-top:14px;overflow-x:auto;white-space:nowrap}
+.dg{display:block;margin:10px auto 2px;max-width:100%;height:auto}
+.dg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
+.dg .box{fill:var(--cell);stroke:var(--cell-border);stroke-width:1.5}
+.dg .win{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.5}
+.dg .bar{fill:var(--accent)}
+.dg .accs{stroke:var(--accent);fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.dg .edge{stroke:var(--border-2);fill:none;stroke-width:2}
+.dgdec{display:grid;gap:6px;margin:10px 0 2px;font-size:13px}
+.dgdec > div{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px}
+.dgdec b{font-family:var(--mono)}
+.dgdec .acc{color:var(--accent);font-weight:700}
+/* question */
+.qtag{font-size:11px;text-transform:uppercase;letter-spacing:.1em;font-weight:700;color:var(--accent)}
+.qprompt{font-size:17px;font-weight:600;margin:6px 0 4px;letter-spacing:-.01em}
+.choices{display:grid;gap:9px;margin-top:14px}
+.choice{font:inherit;text-align:left;background:var(--surface);border:1.5px solid var(--border-2);border-radius:11px;padding:12px 14px;cursor:pointer;color:var(--fg);display:flex;align-items:center;gap:11px;transition:border-color .1s,background .1s}
+.choice:hover:not(:disabled){border-color:var(--accent)}
+.choice .k{width:24px;height:24px;flex:none;border-radius:6px;background:var(--surface-2);display:grid;place-items:center;font-weight:700;font-size:13px;font-family:"Space Grotesk",sans-serif}
+.choice:disabled{cursor:default}
+.choice.correct{border-color:var(--good);background:var(--good-soft)}
+.choice.correct .k{background:var(--good);color:#fff}
+.choice.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.choice.wrong .k{background:var(--bad);color:#fff}
+.numin{display:flex;gap:9px;margin-top:14px;flex-wrap:wrap}
+.numin input{font:inherit;font-family:var(--mono);font-size:17px;padding:11px 14px;border:1.5px solid var(--border-2);border-radius:11px;background:var(--surface);color:var(--fg);width:150px}
+.numin input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+.feedback{margin-top:14px;border-radius:11px;padding:13px 15px;font-size:14px;border:1px solid}
+.feedback.ok{background:var(--good-soft);border-color:transparent}
+.feedback.no{background:var(--bad-soft);border-color:transparent}
+.feedback .hd{font-weight:700;display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.feedback.ok .hd{color:var(--good)}
+.feedback.no .hd{color:var(--bad)}
+.banner{border-radius:11px;padding:12px 14px;margin-bottom:14px;font-size:13.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.banner.warn{background:var(--warn-soft);color:var(--warn)}
+.banner.acc{background:var(--accent-soft);color:var(--accent)}
+.banner b{font-weight:700}
+.unlock{display:flex;gap:9px;flex-wrap:wrap;margin-top:10px}
+.chip{font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:9px;background:var(--surface-2);border:1px solid var(--border)}
+.chip.f{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.bigemoji{font-size:30px}
+.center{text-align:center}
+/* summary */
+.sumsec{margin-top:18px}
+.sumsec h3{font-size:16px;margin:0 0 10px;padding-bottom:7px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.wronglist{display:grid;gap:12px}
+.wrongitem{border:1px solid var(--border);border-left:3px solid var(--bad);border-radius:10px;padding:13px}
+.wrongitem .q{font-weight:600;margin-bottom:6px}
+.wrongitem .ln{font-size:13px;margin:2px 0}
+.wrongitem .yours{color:var(--bad)}
+.wrongitem .sol{color:var(--good)}
+.foot{margin-top:26px;text-align:center;color:var(--faint);font-size:12px}
+@media print{
+  .clockbar,.noprint{display:none!important}
+  body{background:#fff;color:#000;font-size:12px}
+  .card,.wrongitem{box-shadow:none;border-color:#bbb}
+  .wrap{padding:0;max-width:none}
+}
+</style>
+
+<div class="clockbar">
+  <span class="brand"><span class="px"><i></i><i class="d"></i><i></i><i></i><i></i><i class="d"></i><i class="d"></i><i></i><i></i></span>Kernel Quest</span>
+  <div class="clk"><b id="clkSpent">0:00</b><span>Time today</span></div>
+  <div class="clk left" id="clkLeftWrap"><b id="clkLeft">3:40:00</b><span>Left in plan</span></div>
+  <button class="tbtn" id="themeBtn" title="Toggle light/dark" aria-label="Toggle theme">◐</button>
+</div>
+<div class="wrap"><div id="app"></div></div>
+
+<script>
+"use strict";
+/* ---------- helpers ---------- */
+function el(h){const d=document.createElement('div');d.innerHTML=h.trim();return d.firstChild;}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function mat(rows,opts){
+  opts=opts||{};
+  const hl=opts.hl; // [r,c] to highlight center
+  let h='<div class="mat'+(hl?' hl':'')+'">';
+  rows.forEach((row,r)=>{h+='<div class="r">';row.forEach((v,c)=>{
+    const isc=hl&&hl[0]===r&&hl[1]===c;
+    h+='<b class="'+(isc?'c':'')+'">'+esc(v)+'</b>';
+  });h+='</div>';});
+  return h+'</div>';
+}
+function kbox(parts){ // parts: array of {lab, rows} or {op}
+  let h='<div class="kbox">';
+  parts.forEach(p=>{
+    if(p.op){h+='<div class="op">'+esc(p.op)+'</div>';}
+    else{h+='<div class="kgroup"><span class="lab">'+esc(p.lab)+'</span>'+mat(p.rows,{hl:p.hl})+'</div>';}
+  });
+  return h+'</div>';
+}
+function fmtT(sec){sec=Math.max(0,Math.round(sec));const h=Math.floor(sec/3600),m=Math.floor(sec%3600/60),s=sec%60;
+  return h>0?h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'):m+':'+String(s).padStart(2,'0');}
+
+/* ---------- mini-lesson diagrams (theme-aware inline SVG / HTML) ---------- */
+const DG={
+  slide(){const n=7,w=34,g=5,pad=6;const W=n*(w+g)-g+pad*2,H=58;let r='';
+    for(let i=0;i<n;i++){const x=pad+i*(w+g);const on=i>=2&&i<=4;
+      r+=`<rect x="${x}" y="6" width="${w}" height="${w}" rx="4" class="${on?'win':'box'}"/>`;}
+    return `<svg class="dg" viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="a kernel window sliding over a row of pixels">${r}
+      <text x="${W/2}" y="${H-5}" text-anchor="middle">window × kernel, then add → one output pixel</text></svg>`;},
+  size(){const n=7,w=26,g=4,pad=6;const W=n*(w+g)-g+pad*2,H=58;let r='';
+    for(let i=0;i<n;i++){const x=pad+i*(w+g);r+=`<rect x="${x}" y="20" width="${w}" height="${w}" rx="3" class="${i<3?'win':'box'}"/>`;}
+    return `<svg class="dg" viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="N pixels, a K-wide window, fewer outputs">
+      <text x="${pad}" y="13">N pixels · K-wide window</text>${r}
+      <text x="${W/2}" y="${H-3}" text-anchor="middle">valid outputs = N − K + 1</text></svg>`;},
+  flip(){return `<div class="row" style="gap:14px;justify-content:center;margin:10px 0 2px">
+      ${mat([[1,2,3],[4,5,6],[7,8,9]])}<span style="font-size:20px;color:var(--accent);font-weight:700">⟳180°→</span>${mat([[9,8,7],[6,5,4],[3,2,1]])}</div>`;},
+  bell(){const W=240,H=72;return `<svg class="dg" viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="a smooth Gaussian curve over a flat box">
+      <rect x="72" y="30" width="96" height="30" class="box"/>
+      <path d="M18,60 C72,60 82,14 120,14 C158,14 168,60 222,60" class="accs"/>
+      <text x="120" y="70" text-anchor="middle">Gaussian (smooth) vs box (flat) — each sums to 1</text></svg>`;},
+  step(){const W=240,H=82;return `<svg class="dg" viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="an intensity step and the gradient spike at the edge">
+      <path d="M12,56 L112,56 L112,22 L228,22" class="edge"/>
+      <path d="M12,72 L108,72 L120,40 L132,72 L228,72" class="accs"/>
+      <text x="12" y="14">intensity step  ▔   gradient spikes ▲ at the edge</text></svg>`;},
+  decision(){return `<div class="dgdec">
+      <div><b>Σ = 1</b>, center big, negative edges → <span class="acc">Sharpen</span></div>
+      <div><b>Σ = 1</b>, all equal → <span class="acc">Blur</span></div>
+      <div><b>Σ = 0</b>, +/− split → <span class="acc">Edge / gradient</span></div>
+      <div>a lone <b>1</b> in the center → <span class="acc">Identity</span></div></div>`;},
+  cost(){const W=240,H=92;return `<svg class="dg" viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="a tall naive-cost bar beside a short separable-cost bar">
+      <rect x="44" y="12" width="58" height="60" class="bar"/>
+      <rect x="152" y="56" width="58" height="16" class="win"/>
+      <text x="73" y="86" text-anchor="middle">naïve  K²</text>
+      <text x="181" y="86" text-anchor="middle">separable 2K</text></svg>`;},
+  pyramid(){const W=210,H=96;let r='',size=64,x=8;for(let i=0;i<4;i++){r+=`<rect x="${x}" y="${78-size}" width="${size}" height="${size}" class="box"/>`;x+=size+8;size/=2;}
+    return `<svg class="dg" viewBox="0 0 ${W} ${H}" width="${W}" role="img" aria-label="squares halving in size at each pyramid level">${r}
+      <text x="${W/2}" y="92" text-anchor="middle">blur, then halve — level n side = N / 2ⁿ</text></svg>`;}
+};
+const LESSONS={
+  1:{title:"Slide · multiply · add",d:DG.slide(),f:"out(i,j) = Σ ( kernel × pixel underneath )"},
+  2:{title:"Output size & borders",d:DG.size(),f:"O = ⌊ (N + 2P − K) / S ⌋ + 1   ·   'same' → P = (K−1)/2"},
+  3:{title:"Convolution flips the kernel",d:DG.flip(),f:"convolution = flip kernel 180°, then slide-multiply-add"},
+  4:{title:"Blur = weighted average",d:DG.bell(),f:"box = all 1/K²   ·   Gaussian = bell weights   ·   weights sum to 1"},
+  5:{title:"Edges = the gradient",d:DG.step(),f:"|∇I| = √(Gx² + Gy²)   ·   every derivative kernel sums to 0"},
+  6:{title:"Read the kernel's shape",d:DG.decision(),f:"sum→1 center-heavy = sharpen · sum→1 equal = blur · sum→0 = edge"},
+  7:{title:"Cost of a convolution",d:DG.cost(),f:"naïve O(K²) · separable O(2K) · FFT O(log N) per pixel"},
+  8:{title:"Scale space & pyramids",d:DG.pyramid(),f:"blur then halve · level n side = N/2ⁿ · DoG ≈ Laplacian-of-Gaussian"}
+};
+
+/* ---------- curriculum ---------- */
+const BUDGET=[20,15,20,30,40,15,20,30]; // minutes per world
+const EXAM_BUDGET=30;
+const PLAN_MIN=BUDGET.reduce((a,b)=>a+b,0)+EXAM_BUDGET; // 220
+
+const WORLDS=[
+{ num:1, title:"Slide, multiply, add", sub:"The one move every filter makes",
+  story:[
+    "A filter is just a tiny grid of numbers called a <b>kernel</b>. Filtering an image is one move repeated everywhere: lay the kernel over a patch of pixels, multiply each kernel number by the pixel beneath it, and add up all the products. That single sum becomes one output pixel. Slide one step, repeat.",
+    "That's the whole engine. Blur, sharpen, edge detection — they differ only in what numbers sit in the kernel. Learn the move once and every filter is the same machine with different settings."
+  ],
+  formulas:[{t:"out(i,j) = Σ<sub>m,n</sub> K(m,n) · I(i+m, j+n)", n:"Cross-correlation: overlap the kernel, multiply pointwise, sum."}],
+  filters:["Identity kernel"],
+  example:{
+    html:"The <b>sharpen</b> kernel on one patch. Multiply each pair, then sum:"+
+      kbox([{lab:"patch I",rows:[[10,10,10],[10,80,10],[10,10,10]],hl:[1,1]},{op:"✦"},{lab:"kernel K",rows:[[0,-1,0],[-1,5,-1],[0,-1,0]],hl:[1,1]}])+
+      "<p class='muted'>Center: 80·5 = 400. The four neighbours: 10·(-1) four times = -40. Corners are ·0. Output = 400 − 40 = <b>360</b> — the bright center is pushed brighter.</p>"
+  },
+  challenges:[
+    {tag:"Warm-up",prompt:"Multiply pointwise and sum this 2×2 patch with the all-ones kernel.",
+      render:kbox([{lab:"patch",rows:[[10,10],[10,10]]},{op:"✦"},{lab:"kernel",rows:[[1,1],[1,1]]}]),
+      type:"num",answer:40,explain:"Every product is 10·1 = 10, and there are four of them: 10+10+10+10 = 40."},
+    {tag:"1-D",prompt:"A 1-D kernel across one row. What is the single output value?",
+      render:kbox([{lab:"row",rows:[[2,4,6]]},{op:"✦"},{lab:"kernel",rows:[[1,0,-1]]}]),
+      type:"num",answer:-4,explain:"2·1 + 4·0 + 6·(−1) = 2 + 0 − 6 = −4."},
+    {tag:"Identity",prompt:"The identity kernel is 1 in the center, 0 elsewhere. What comes out over this patch?",
+      render:kbox([{lab:"patch",rows:[[3,9,2],[8,7,1],[4,6,5]],hl:[1,1]},{op:"✦"},{lab:"kernel",rows:[[0,0,0],[0,1,0],[0,0,0]],hl:[1,1]}]),
+      type:"num",answer:7,explain:"Only the center weight is non-zero, so the output equals the center pixel: 7. Identity copies the image unchanged."},
+    {tag:"Picker",prompt:"This kernel is 1 only in the bottom-right slot. What value does it select?",
+      render:kbox([{lab:"patch",rows:[[1,2],[3,4]]},{op:"✦"},{lab:"kernel",rows:[[0,0],[0,1]]}]),
+      type:"num",answer:4,explain:"Only the bottom-right pair survives: 4·1 = 4. A single 1 just picks out one position."},
+    {tag:"Concept",prompt:"A box-average kernel (all entries 1/9) runs over a patch where every pixel is 90. The output is…",
+      type:"mc",choices:["0","10","90","810"],answer:2,
+      explain:"Nine copies of 90·(1/9) = 10 each, summed: 9·10 = 90. Averaging a flat region returns the same value."},
+    {tag:"Flat test",prompt:"Sum this patch (all 1s) against the Laplacian-style kernel.",
+      render:kbox([{lab:"patch",rows:[[1,1,1],[1,1,1],[1,1,1]],hl:[1,1]},{op:"✦"},{lab:"kernel",rows:[[-1,-1,-1],[-1,8,-1],[-1,-1,-1]],hl:[1,1]}]),
+      type:"num",answer:0,explain:"Center 1·8 = 8; the eight neighbours give 8·(1·−1) = −8. Total 0. Kernels that sum to zero give nothing on flat regions."}
+  ],
+  boss:{tag:"BOSS",prompt:"Apply the sharpen kernel to this full patch — compute the center output pixel.",
+    render:kbox([{lab:"patch",rows:[[0,50,0],[50,100,50],[0,50,0]],hl:[1,1]},{op:"✦"},{lab:"sharpen",rows:[[0,-1,0],[-1,5,-1],[0,-1,0]],hl:[1,1]}]),
+    type:"num",answer:300,explain:"Center 100·5 = 500. Four edge neighbours 50·(−1) = −200 total. Corners ·0. 500 − 200 = 300."}
+},
+{ num:2, title:"Sizes and borders", sub:"How big is the output, and what happens at the edge",
+  story:[
+    "When you slide a K×K kernel over an N×N image, the kernel can't hang off the edge — so a plain (<b>valid</b>) pass shrinks the image to N−K+1 on each side. Add zero-padding P around the border and step by stride S, and the output size follows one formula.",
+    "At the true edge the kernel still overhangs. You choose a <b>border rule</b>: pad with zeros, <b>replicate</b> the nearest edge pixel, <b>reflect</b> the image back, or <b>wrap</b> around. 'Same' padding picks P so the output matches the input size."
+  ],
+  formulas:[{t:"O = ⌊ (N + 2P − K) / S ⌋ + 1", n:"Output side length. 'Valid' = P 0. 'Same' (odd K, S 1) uses P = (K−1)/2."}],
+  filters:["Valid vs same padding"],
+  example:{
+    html:"A 7×7 image, 3×3 kernel, no padding, stride 1:"+
+      "<div class='formula'>O = ⌊(7 + 0 − 3)/1⌋ + 1 = 4 + 1 = 5<span class='n'>The 7×7 image becomes 5×5 — it loses a one-pixel ring.</span></div>"+
+      "<p class='muted'>Want to keep it 7×7? Pad by P = (3−1)/2 = 1 and O = (7+2−3)+1 = 7.</p>"
+  },
+  challenges:[
+    {tag:"Valid",prompt:"N = 7, K = 3, no padding, stride 1. Output side length?",type:"num",answer:5,
+      explain:"7 − 3 + 1 = 5."},
+    {tag:"Valid",prompt:"A 100×100 image, 5×5 kernel, 'valid'. Output side?",type:"num",answer:96,
+      explain:"100 − 5 + 1 = 96."},
+    {tag:"Same",prompt:"To keep the output the same size with a 5×5 kernel (stride 1), how much zero-padding P on each side?",type:"num",answer:2,
+      explain:"P = (K−1)/2 = (5−1)/2 = 2."},
+    {tag:"Stride",prompt:"N = 8, K = 3, P = 0, stride S = 2. Output side?",type:"num",answer:3,
+      explain:"⌊(8 − 3)/2⌋ + 1 = ⌊2.5⌋ + 1 = 2 + 1 = 3."},
+    {tag:"Borders",prompt:"At the edge, repeating the nearest edge pixel outward is called…",type:"mc",
+      choices:["Zero padding","Replicate (clamp)","Reflect","Wrap (circular)"],answer:1,
+      explain:"Replicate — also called clamp or edge-extend — holds the boundary pixel's value out into the overhang."},
+    {tag:"1-D",prompt:"A length-10 signal convolved 'valid' with a length-4 kernel gives how many outputs?",type:"num",answer:7,
+      explain:"10 − 4 + 1 = 7."}
+  ],
+  boss:{tag:"BOSS",prompt:"The classic ResNet stem: N = 224, K = 7, P = 3, stride S = 2. Output side length?",type:"num",answer:112,
+    explain:"⌊(224 + 6 − 7)/2⌋ + 1 = ⌊223/2⌋ + 1 = 111 + 1 = 112."}
+},
+{ num:3, title:"Convolution vs correlation", sub:"The flip that the textbooks argue about",
+  story:[
+    "The slide-multiply-add you learned is technically <b>cross-correlation</b>: kernel as-is. True <b>convolution</b> first flips the kernel 180° (mirror both axes), then does the same thing. That flip is what makes convolution mathematically clean — it's commutative and associative, so filters compose predictably.",
+    "Two consequences worth memorising. If the kernel is symmetric (box, Gaussian, Laplacian), the flip changes nothing and the two are identical. And the 'conv' layers in deep learning are actually correlation — the framework never flips, because it learns the weights either way."
+  ],
+  formulas:[{t:"(I ∗ K)(i,j) = Σ<sub>m,n</sub> I(i−m, j−n) · K(m,n)", n:"Convolution: note the minus signs — the kernel is flipped. Correlation uses (i+m, j+n)."}],
+  filters:["Kernel flip (180°)"],
+  example:{
+    html:"Flipping a kernel 180° reverses it along both axes:"+
+      kbox([{lab:"kernel K",rows:[[1,2,3],[4,5,6],[7,8,9]]},{op:"→"},{lab:"flipped",rows:[[9,8,7],[6,5,4],[3,2,1]]}])+
+      "<p class='muted'>Convolution correlates with the right-hand grid. A handy fact: convolving an impulse (a lone 1) with K stamps an unflipped copy of K at that spot.</p>"
+  },
+  challenges:[
+    {tag:"Definition",prompt:"To convolve (rather than correlate), what do you do to the kernel first?",type:"mc",
+      choices:["Normalize it to sum 1","Flip it 180° (mirror both axes)","Transpose it","Nothing — they're the same"],answer:1,
+      explain:"Convolution mirrors the kernel across both axes (a 180° rotation) before sliding."},
+    {tag:"Flip",prompt:"Flip this kernel 180°. Which grid is correct?",render:kbox([{lab:"kernel",rows:[[1,0,0],[0,0,0],[0,0,2]]}]),
+      type:"mc",choices:["[[2,0,0],[0,0,0],[0,0,1]]","[[0,0,1],[0,0,0],[2,0,0]]","[[1,0,0],[0,0,0],[0,0,2]]","[[0,0,2],[0,0,0],[1,0,0]]"],answer:0,
+      explain:"180° rotation sends top-left↔bottom-right: the 1 moves to bottom-right, the 2 to top-left → [[2,0,0],[0,0,0],[0,0,1]]."},
+    {tag:"When equal",prompt:"For which kernel do convolution and correlation give identical results?",type:"mc",
+      choices:["Any symmetric kernel (e.g. Gaussian)","A Sobel edge kernel","An asymmetric gradient","Never — they always differ"],answer:0,
+      explain:"If the kernel is unchanged by a 180° flip (symmetric), there's nothing to flip, so the two operations match."},
+    {tag:"Impulse",prompt:"Convolving an image that is a single impulse (one lone 1) with kernel K produces…",type:"mc",
+      choices:["Zeros everywhere","An unflipped copy of K stamped at the impulse","A flipped copy of K","The average of K"],answer:1,
+      explain:"The flip in convolution exactly undoes the mirror, so an impulse stamps K the right way round — the basis of 'impulse response'."},
+    {tag:"Deep learning",prompt:"The convolutional layers in neural networks actually implement…",type:"mc",
+      choices:["True convolution","Cross-correlation","FFT multiplication","Median filtering"],answer:1,
+      explain:"Frameworks skip the flip and run correlation; since the weights are learned, the distinction doesn't matter to the network."},
+    {tag:"Algebra",prompt:"Is true convolution commutative, i.e. I ∗ K = K ∗ I?",type:"mc",
+      choices:["Yes","No","Only for 1-D signals","Only for square kernels"],answer:0,
+      explain:"Yes — the flip makes convolution commutative and associative, which correlation is not."}
+  ],
+  boss:{tag:"BOSS",prompt:"Convolve (not correlate) this patch with the kernel. Remember to flip the kernel first, then compute the single output.",
+    render:kbox([{lab:"patch",rows:[[1,2],[3,4]]},{op:"∗"},{lab:"kernel",rows:[[1,0],[0,0]]}]),
+    type:"num",answer:4,explain:"Flip the kernel 180° → [[0,0],[0,1]]. Now correlate: only the bottom-right pair survives, 4·1 = 4. (Correlation would have given 1.)"}
+},
+{ num:4, title:"Blur", sub:"Averaging away detail — box and Gaussian",
+  story:[
+    "Blur is a weighted average of a neighbourhood. The <b>box blur</b> is the blunt version: a K×K kernel of all 1/K², so every nearby pixel counts equally. It smooths noise but leaves boxy artefacts and ringing.",
+    "The <b>Gaussian blur</b> weights by a bell curve — the center pixel counts most, neighbours fade smoothly — giving clean, natural smoothing. Its secret weapon is <b>separability</b>: a 2-D Gaussian equals one horizontal 1-D pass followed by one vertical pass, which is much cheaper. Always normalise so the weights sum to 1, or the image gets brighter or darker."
+  ],
+  formulas:[
+    {t:"box = (1/K²) · ones(K,K)", n:"Every weight equal; weights sum to 1."},
+    {t:"G(x,y) = exp(−(x²+y²)/2σ²) / (2πσ²)", n:"Gaussian: σ sets the blur radius; separable into two 1-D passes."}
+  ],
+  filters:["Box blur","Gaussian blur"],
+  example:{
+    html:"The smallest Gaussian is the 1-D kernel [1, 2, 1], normalised by its sum (4):"+
+      "<div class='formula'>[1, 2, 1] / 4   on window [40, 80, 40]<span class='n'>(1·40 + 2·80 + 1·40) / 4 = (40 + 160 + 40)/4 = 240/4 = 60</span></div>"+
+      "<p class='muted'>The middle pixel is pulled toward its neighbours — softened, not erased. Dividing by 4 keeps the overall brightness unchanged.</p>"
+  },
+  challenges:[
+    {tag:"Box",prompt:"In a 3×3 box-blur kernel, what is each entry?",type:"mc",
+      choices:["1","1/3 ≈ 0.333","1/9 ≈ 0.111","9"],answer:2,
+      explain:"A 3×3 box averages 9 pixels equally, so each weight is 1/9 ≈ 0.111."},
+    {tag:"Normalise",prompt:"Why must a blur kernel's weights sum to 1?",type:"mc",
+      choices:["To detect edges","To preserve overall brightness","To sharpen the result","To make it separable"],answer:1,
+      explain:"If the weights summed to more or less than 1, a flat gray region would come out brighter or darker. Summing to 1 preserves brightness."},
+    {tag:"Flat",prompt:"A box blur runs over a region where every pixel is 200. Output value?",type:"num",answer:200,
+      explain:"Averaging identical values returns that value: 200. Blur only changes things where pixels differ."},
+    {tag:"Gaussian",prompt:"The 1-D Gaussian kernel [1, 2, 1] is normalised by dividing by what number?",type:"num",answer:4,
+      explain:"The weights sum to 1 + 2 + 1 = 4, so divide by 4."},
+    {tag:"Compare",prompt:"Which produces smoother blur with less ringing and fewer artefacts?",type:"mc",
+      choices:["Box blur","Gaussian blur","They're identical","Neither blurs"],answer:1,
+      explain:"The Gaussian's smooth falloff avoids the hard cutoff of the box, so it rings far less."},
+    {tag:"Speed trick",prompt:"A 2-D Gaussian can be applied as two 1-D passes because it is…",type:"mc",
+      choices:["Normalized","Symmetric","Separable","Isotropic"],answer:2,
+      explain:"A Gaussian is separable: the 2-D kernel equals the outer product of two 1-D Gaussians, so you filter rows then columns."}
+  ],
+  boss:{tag:"BOSS",prompt:"Apply the normalised Gaussian [1, 2, 1]/4 to the window [100, 200, 100]. Output value?",type:"num",answer:150,
+    explain:"(1·100 + 2·200 + 1·100)/4 = (100 + 400 + 100)/4 = 600/4 = 150."}
+},
+{ num:5, title:"Edges", sub:"Where the image changes fastest",
+  story:[
+    "An edge is a place where intensity changes sharply, so edge detectors measure the <b>gradient</b> — the local rate of change. The <b>Sobel</b> kernels do this: Sobel-X responds to horizontal change (vertical edges), Sobel-Y to vertical change. <b>Prewitt</b> is the same idea with equal weights.",
+    "Run both, then combine: the <b>gradient magnitude</b> √(Gx² + Gy²) tells you how strong the edge is, and its direction tells you which way it runs. The <b>Laplacian</b> is a second-derivative operator — it finds edges as zero-crossings and highlights fine detail. Every derivative kernel has entries that sum to zero, so a flat region gives zero response."
+  ],
+  formulas:[
+    {t:"Gx = [[−1,0,1],[−2,0,2],[−1,0,1]]   (Sobel-X)", n:"Horizontal gradient → detects vertical edges. Gy is its transpose."},
+    {t:"|∇I| = √(Gx² + Gy²)", n:"Edge strength. Direction = atan2(Gy, Gx)."},
+    {t:"∇²I  ≈  [[0,1,0],[1,−4,1],[0,1,0]]", n:"Laplacian: second derivative, edges at zero-crossings."}
+  ],
+  filters:["Sobel-X","Sobel-Y","Prewitt","Laplacian"],
+  example:{
+    html:"A strong horizontal edge — dark on top, bright below — hit with Sobel-Y:"+
+      kbox([{lab:"patch",rows:[[10,10,10],[10,10,10],[80,80,80]]},{op:"✦"},{lab:"Sobel-Y",rows:[[-1,-2,-1],[0,0,0],[1,2,1]]}])+
+      "<p class='muted'>Top row: −(10+20+10) = −40. Middle row: 0. Bottom row: 80+160+80 = 320. Sum = 280 — a big response, because an edge really is there.</p>"
+  },
+  challenges:[
+    {tag:"Zero-sum",prompt:"What do the entries of any edge / derivative kernel sum to?",type:"num",answer:0,
+      explain:"They sum to 0, so constant regions (no change) produce no response."},
+    {tag:"Flat",prompt:"A Sobel filter runs over a perfectly flat (constant) region. Output?",type:"num",answer:0,
+      explain:"No intensity change means no gradient: the response is 0."},
+    {tag:"Magnitude",prompt:"At a pixel Gx = 3 and Gy = 4. The gradient magnitude √(Gx² + Gy²) is…",type:"num",answer:5,
+      explain:"√(9 + 16) = √25 = 5."},
+    {tag:"Orientation",prompt:"Which kernel detects vertical edges (horizontal intensity change)?",type:"mc",
+      choices:["[[−1,0,1],[−2,0,2],[−1,0,1]] (Sobel-X)","[[−1,−2,−1],[0,0,0],[1,2,1]] (Sobel-Y)","[[1,1,1],[1,1,1],[1,1,1]]/9","[[0,0,0],[0,1,0],[0,0,0]]"],answer:0,
+      explain:"Sobel-X differences left vs right, so it fires on vertical edges. Sobel-Y (its transpose) catches horizontal ones."},
+    {tag:"Laplacian",prompt:"In the Laplacian kernel [[0,1,0],[1,−4,1],[0,1,0]], what is the center value?",type:"num",answer:-4,
+      explain:"The center is −4, balancing the four neighbouring +1s so the kernel sums to zero."},
+    {tag:"Compute",prompt:"Apply the 1-D Sobel-X profile [−1, 0, 1] to the row [10, 10, 50].",type:"num",answer:40,
+      explain:"−1·10 + 0·10 + 1·50 = −10 + 0 + 50 = 40 — a positive edge where the row brightens."}
+  ],
+  boss:{tag:"BOSS",prompt:"Apply Sobel-Y to this patch and sum all nine products.",
+    render:kbox([{lab:"patch",rows:[[10,10,10],[10,10,10],[80,80,80]]},{op:"✦"},{lab:"Sobel-Y",rows:[[-1,-2,-1],[0,0,0],[1,2,1]]}]),
+    type:"num",answer:280,explain:"Top: −10 −20 −10 = −40. Middle: 0. Bottom: 80 +160 +80 = 320. Total = 280."}
+},
+{ num:6, title:"Name that filter", sub:"See the kernel, call the effect",
+  story:[
+    "You now know every building block. This world is pure recognition: a kernel appears, you name what it does. The tells are quick — does it sum to 1 (preserves brightness: blur or sharpen) or to 0 (edges)? Is the center big and positive with negative neighbours (sharpen)? Is it a left-minus-right pattern (gradient)?",
+    "Go fast. Each is a snap judgement, not a calculation."
+  ],
+  formulas:[{t:"sum→1 & center-heavy ⇒ sharpen · sum→1 & equal ⇒ blur · sum→0 ⇒ edge", n:"The brightness sum and the shape give the filter away."}],
+  filters:["Sharpen","Emboss"],
+  example:{
+    html:"Read the pattern, not the arithmetic:"+
+      kbox([{lab:"",rows:[[0,-1,0],[-1,5,-1],[0,-1,0]],hl:[1,1]}])+
+      "<p class='muted'>Big positive center (5), negative neighbours, sums to 1 → <b>Sharpen</b>. It boosts a pixel relative to its surroundings.</p>"
+  },
+  challenges:[
+    {tag:"Name it",prompt:"What does this kernel do?",render:kbox([{lab:"",rows:[[0,0,0],[0,1,0],[0,0,0]]}]),
+      type:"mc",choices:["Blur","Identity (no change)","Sharpen","Edge detect"],answer:1,
+      explain:"A lone 1 in the center copies the image unchanged — the identity."},
+    {tag:"Name it",prompt:"What does this kernel do?",render:kbox([{lab:"÷9",rows:[[1,1,1],[1,1,1],[1,1,1]]}]),
+      type:"mc",choices:["Box blur","Sharpen","Sobel edge","Emboss"],answer:0,
+      explain:"All-equal weights summing to 1 average the neighbourhood — a box blur."},
+    {tag:"Name it",prompt:"What does this kernel do?",render:kbox([{lab:"",rows:[[0,-1,0],[-1,5,-1],[0,-1,0]]}]),
+      type:"mc",choices:["Blur","Sharpen","Gradient","Identity"],answer:1,
+      explain:"Center-heavy, sums to 1, negative neighbours — sharpen."},
+    {tag:"Name it",prompt:"What does this kernel do?",render:kbox([{lab:"",rows:[[-1,0,1],[-2,0,2],[-1,0,1]]}]),
+      type:"mc",choices:["Gaussian blur","Identity","Sobel — vertical edges","Emboss"],answer:2,
+      explain:"Left-negative, right-positive, summing to 0 — Sobel-X, detecting vertical edges."},
+    {tag:"Name it",prompt:"What does this kernel do?",render:kbox([{lab:"",rows:[[-2,-1,0],[-1,1,1],[0,1,2]]}]),
+      type:"mc",choices:["Emboss","Box blur","Laplacian","Identity"],answer:0,
+      explain:"A diagonal negative-to-positive ramp gives a lit-from-one-side relief — emboss."},
+    {tag:"Name it",prompt:"What does this kernel do?",render:kbox([{lab:"",rows:[[0,1,0],[1,-4,1],[0,1,0]]}]),
+      type:"mc",choices:["Sharpen","Box blur","Laplacian — edges","Identity"],answer:2,
+      explain:"Center −4, neighbours +1, sums to 0 — the Laplacian second-derivative edge detector."}
+  ],
+  boss:{tag:"BOSS",prompt:"Final call — what does this one do?",render:kbox([{lab:"",rows:[[-1,-1,-1],[-1,9,-1],[-1,-1,-1]],hl:[1,1]}]),
+    type:"mc",choices:["Box blur","Strong sharpen","Sobel edge","Gaussian blur"],answer:1,
+    explain:"Center 9, eight neighbours −1, total = 1. Center-heavy and sums to 1 → an aggressive sharpen."}
+},
+{ num:7, title:"Speed", sub:"Why separable kernels and the FFT matter",
+  story:[
+    "A naïve 2-D convolution does K² multiplies for every one of the N² output pixels — O(N²K²). That's fine for tiny kernels and brutal for big ones. Two escapes change the game.",
+    "<b>Separable kernels</b> (any rank-1 kernel, like the Gaussian) split into a 1-D row pass and a 1-D column pass: 2K multiplies per pixel instead of K², a K/2 speedup. For very large kernels the <b>FFT</b> wins: the convolution theorem says convolution in space equals pointwise multiplication in frequency, giving O(N² log N) regardless of kernel size."
+  ],
+  formulas:[{t:"naïve O(N²K²) · separable O(N²·2K) · FFT O(N² log N)", n:"A kernel is separable exactly when its matrix has rank 1."}],
+  filters:["Separable filtering","FFT convolution"],
+  example:{
+    html:"An 11×11 kernel, per output pixel:"+
+      "<div class='formula'>naïve: 11² = 121 mults   ·   separable: 2·11 = 22 mults<span class='n'>Speedup = 121 / 22 = 5.5×. The bigger the kernel, the bigger the win (≈ K/2).</span></div>"
+  },
+  challenges:[
+    {tag:"Naïve",prompt:"Naïve convolution with a 5×5 kernel does how many multiplies per output pixel?",type:"num",answer:25,
+      explain:"K² = 5² = 25 multiplies per pixel."},
+    {tag:"Separable",prompt:"A separable 5×5 kernel does how many multiplies per pixel (two 1-D passes)?",type:"num",answer:10,
+      explain:"2K = 2·5 = 10 — one row pass of 5 plus one column pass of 5."},
+    {tag:"Speedup",prompt:"Separable vs naïve speedup for an 11×11 kernel = K²/(2K). Compute it.",type:"num",answer:5.5,tol:0.05,
+      explain:"121 / 22 = 5.5. In general the ratio is K/2."},
+    {tag:"Theorem",prompt:"The convolution theorem says convolution in space equals ___ in the frequency domain.",type:"mc",
+      choices:["Addition","Multiplication","Convolution again","Subtraction"],answer:1,
+      explain:"Convolution ↔ pointwise multiplication of the two transforms — the basis of FFT-based filtering."},
+    {tag:"When FFT",prompt:"For a very large kernel, which is faster?",type:"mc",
+      choices:["Direct convolution","FFT-based convolution","They tie","Separable is always fastest"],answer:1,
+      explain:"FFT convolution is O(N² log N), independent of kernel size, so it overtakes direct methods once K is large."},
+    {tag:"Rank",prompt:"A 2-D kernel is separable exactly when its matrix has what rank?",type:"num",answer:1,
+      explain:"Rank 1 — it factors as an outer product of a column vector and a row vector."}
+  ],
+  boss:{tag:"BOSS",prompt:"A 15×15 kernel. How many times fewer multiplies does the separable method use than naïve, per pixel? (naïve ÷ separable)",type:"num",answer:7.5,tol:0.05,
+    explain:"Naïve 15² = 225; separable 2·15 = 30. 225 / 30 = 7.5× fewer."}
+},
+{ num:8, title:"Scales and theory", sub:"Pyramids, scale space, and seeing coarse structure",
+  story:[
+    "One kernel sees one scale. To see structure at every size, build a <b>scale space</b>: blur the image with a growing σ, and coarser and coarser features emerge. Stack blur-then-downsample-by-2 repeatedly and you get a <b>Gaussian pyramid</b> — each level half the resolution of the one below.",
+    "Two theory points. The <b>Difference of Gaussians</b> (subtract two blurs) approximates the Laplacian-of-Gaussian and detects blobs — this is the heart of SIFT. And you must <b>blur before you downsample</b>: skipping the low-pass filter lets high frequencies fold back as aliasing (moiré). Blur removes the detail that can't survive the lower sampling rate."
+  ],
+  formulas:[{t:"DoG(σ₁,σ₂) = G(σ₁) − G(σ₂)  ≈  Laplacian of Gaussian", n:"Pyramid level n has side N/2ⁿ; each octave halves resolution."}],
+  filters:["Difference of Gaussians","Laplacian of Gaussian"],
+  example:{
+    html:"A Gaussian pyramid on a 256-pixel image:"+
+      "<div class='formula'>level 0: 256 → level 1: 128 → level 2: 64 → level 3: 32<span class='n'>Each step blurs (to prevent aliasing) then halves the side. Level n has side 256 / 2ⁿ.</span></div>"
+  },
+  challenges:[
+    {tag:"Aliasing",prompt:"Before downsampling an image by 2, you should first…",type:"mc",
+      choices:["Sharpen it","Blur (low-pass filter) it","Detect its edges","Increase contrast"],answer:1,
+      explain:"Blurring removes high frequencies that the lower sampling rate can't represent, preventing aliasing."},
+    {tag:"Pyramid",prompt:"Each level of a Gaussian pyramid reduces each dimension by a factor of…",type:"num",answer:2,
+      explain:"Each level halves width and height — a factor of 2 per dimension."},
+    {tag:"DoG",prompt:"The Difference of Gaussians approximates which operator?",type:"mc",
+      choices:["Gradient / Sobel","Laplacian of Gaussian","Box blur","Identity"],answer:1,
+      explain:"Subtracting two Gaussians approximates the Laplacian-of-Gaussian, a blob detector used in SIFT."},
+    {tag:"Scale",prompt:"Increasing σ (more blur) reveals which structures?",type:"mc",
+      choices:["Finer, smaller details","Coarser, larger structures","Sharper edges","Image noise"],answer:1,
+      explain:"Larger σ averages over wider areas, so only big, coarse structures survive."},
+    {tag:"Pyramid",prompt:"A 256×256 image. Side length at pyramid level 3 (level 0 = original)?",type:"num",answer:32,
+      explain:"256 / 2³ = 256 / 8 = 32."},
+    {tag:"Aliasing",prompt:"Downsampling without blurring first shows up as…",type:"mc",
+      choices:["Blur","Moiré / false patterns (aliasing)","Darkening","Sharpening"],answer:1,
+      explain:"Unfiltered high frequencies fold into false low-frequency moiré patterns — aliasing."}
+  ],
+  boss:{tag:"BOSS",prompt:"A full Gaussian pyramid stores 1 + 1/4 + 1/16 + … of the base pixels. Total storage is about how many times the base image?",type:"mc",
+    choices:["About 2×","About 4/3× (≈33% more)","About 3×","Exactly 1×"],answer:1,
+    explain:"The geometric series 1 + 1/4 + 1/16 + … sums to 4/3, so a pyramid costs only about a third more memory than the original."}
+}
+];
+
+const EXAM=[
+  {w:1,tag:"W1",prompt:"Row [1, 2, 3] with kernel [−1, 0, 1]. Output?",type:"num",answer:2,
+    explain:"1·(−1) + 2·0 + 3·1 = −1 + 3 = 2."},
+  {w:2,tag:"W2",prompt:"N = 28, K = 5, no padding, stride 1. Output side?",type:"num",answer:24,
+    explain:"28 − 5 + 1 = 24."},
+  {w:2,tag:"W2",prompt:"Keep the output the same size with a 7×7 kernel (stride 1). Padding P?",type:"num",answer:3,
+    explain:"P = (7−1)/2 = 3."},
+  {w:3,tag:"W3",prompt:"True or false: convolution flips the kernel 180° before sliding.",type:"mc",
+    choices:["True","False"],answer:0,explain:"True — the 180° flip is exactly what distinguishes convolution from correlation."},
+  {w:4,tag:"W4",prompt:"Normalised Gaussian [1,2,1]/4 on window [40, 80, 40]. Output?",type:"num",answer:60,
+    explain:"(40 + 160 + 40)/4 = 240/4 = 60."},
+  {w:5,tag:"W5",prompt:"Gradient magnitude when Gx = 6 and Gy = 8.",type:"num",answer:10,
+    explain:"√(36 + 64) = √100 = 10."},
+  {w:5,tag:"W5",prompt:"The entries of any Sobel kernel sum to what?",type:"num",answer:0,
+    explain:"0 — derivative kernels give no response on flat regions."},
+  {w:6,tag:"W6",prompt:"Name this kernel: [[0,−1,0],[−1,5,−1],[0,−1,0]].",type:"mc",
+    choices:["Box blur","Sharpen","Sobel edge","Identity"],answer:1,
+    explain:"Center-heavy, sums to 1 → sharpen."},
+  {w:7,tag:"W7",prompt:"A separable 9×9 kernel does how many multiplies per pixel?",type:"num",answer:18,
+    explain:"2K = 2·9 = 18."},
+  {w:8,tag:"W8",prompt:"Blurring before downsampling prevents…",type:"mc",
+    choices:["Sharpening","Aliasing (moiré)","Brightness loss","Edge detection"],answer:1,
+    explain:"Low-pass blur removes frequencies that would otherwise fold into aliasing."}
+];
+
+/* ---------- state ---------- */
+const KEY="kernelQuest_v1";
+const todayStr=()=>new Date().toISOString().slice(0,10);
+let S=load();
+function freshState(){return{day:todayStr(),active:0,wp:{},exam:{idx:0,started:false,done:false,results:{}},wrong:{},view:{screen:"map"},breaksShown:{}};}
+function load(){
+  try{const raw=localStorage.getItem(KEY);if(!raw)return freshState();
+    const o=JSON.parse(raw);if(o.day!==todayStr())return freshState();
+    return Object.assign(freshState(),o);
+  }catch(e){return freshState();}
+}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
+function wp(num){if(!S.wp[num])S.wp[num]={step:0,fast:false,results:{},reveal:{},bossDone:false,done:false};if(!S.wp[num].reveal)S.wp[num].reveal={};return S.wp[num];}
+
+/* ---------- time ---------- */
+let lastTick=Date.now();
+setInterval(()=>{
+  const now=Date.now();const dt=(now-lastTick)/1000;lastTick=now;
+  const sc=S.view.screen;
+  if(document.visibilityState==="visible" && sc!=="break" && dt<5){S.active+=dt;}
+  renderClock();
+  if(Math.floor(S.active)%5===0)save();
+},1000);
+document.addEventListener("visibilitychange",()=>{lastTick=Date.now();});
+function renderClock(){
+  document.getElementById("clkSpent").textContent=fmtT(S.active);
+  const left=PLAN_MIN*60-S.active;
+  const w=document.getElementById("clkLeftWrap");
+  document.getElementById("clkLeft").textContent=fmtT(Math.abs(left));
+  w.classList.toggle("over",left<0);w.classList.toggle("left",left>=0);
+  w.querySelector("span").textContent=left<0?"Over plan":"Left in plan";
+}
+function cumBudget(worldNum){let s=0;for(let i=0;i<worldNum;i++)s+=BUDGET[i];return s;}
+function isBehind(worldNum){return S.active/60 > cumBudget(worldNum);}
+
+/* ---------- theme ---------- */
+(function initTheme(){
+  let t=null;try{t=localStorage.getItem("kq_theme");}catch(e){}
+  if(t)document.documentElement.setAttribute("data-theme",t);
+})();
+document.getElementById("themeBtn").addEventListener("click",()=>{
+  const cur=document.documentElement.getAttribute("data-theme");
+  const isDark=cur==="dark"||(cur===null&&matchMedia("(prefers-color-scheme:dark)").matches);
+  const next=isDark?"light":"dark";
+  document.documentElement.setAttribute("data-theme",next);
+  try{localStorage.setItem("kq_theme",next);}catch(e){}
+});
+
+/* ---------- unlock collectors ---------- */
+function unlockedFormulas(){const out=[];WORLDS.forEach(w=>{if(wp(w.num).done)w.formulas.forEach(f=>out.push({w:w.num,f}));});return out;}
+function unlockedFilters(){const out=[];WORLDS.forEach(w=>{if(wp(w.num).done)w.filters.forEach(f=>out.push(f));});return out;}
+function completedCount(){return WORLDS.filter(w=>wp(w.num).done).length;}
+
+/* ---------- rendering ---------- */
+const app=document.getElementById("app");
+function render(){
+  const v=S.view;
+  if(v.screen==="map")renderMap();
+  else if(v.screen==="world")renderWorld();
+  else if(v.screen==="exam")renderExam();
+  else if(v.screen==="break")renderBreak();
+  else if(v.screen==="summary")renderSummary();
+  renderClock();save();
+  window.scrollTo({top:0,behavior:"instant"in window?"instant":"auto"});
+}
+function go(screen,extra){S.view=Object.assign({screen},extra||{});save();render();}
+
+function renderMap(){
+  const done=completedCount();
+  let h=`<div class="hero">
+    <div class="scan">${Array.from({length:36}).map((_,i)=>`<i style="opacity:${(Math.sin(i*1.7)+1)/2*0.9+0.1}"></i>`).join("")}</div>
+    <div class="tag">One day · ~3.5 hours · 8 worlds + exam</div>
+    <h1>Kernel Quest</h1>
+    <p>Learn image convolution in a single sitting — from slide-multiply-add to scale space. Play the worlds in order, or jump to any you already know.</p>
+    <div class="plan">
+      <div><b>${done}/8</b><span>worlds cleared</span></div>
+      <div><b>${fmtT(S.active)}</b><span>time today</span></div>
+      <div><b>${Math.round(PLAN_MIN/60*10)/10}h</b><span>full plan</span></div>
+    </div>
+  </div>`;
+
+  if(isBehind(8) && done<8){
+    h+=`<div class="banner warn" style="margin-top:14px"><b>Running behind the plan.</b> Each world has a <b>Fast-track</b> button — one worked example, then straight to the boss.</div>`;
+  }
+
+  h+=`<div class="maptiles">`;
+  WORLDS.forEach((w,i)=>{
+    const p=wp(w.num);const bud=BUDGET[i];
+    h+=`<button class="tile ${p.done?'done':''}" data-act="world" data-w="${w.num}">
+      <span class="no">${p.done?'✓':w.num}</span>
+      <div style="min-width:0"><h3>${esc(w.title)}</h3><div class="sub">${esc(w.sub)}</div></div>
+      <div class="meta"><span class="bud">${bud} min</span>${p.done?'<span class="check">done</span>':(p.step>0?'<span class="faint" style="font-size:11px">in progress</span>':'')}</div>
+    </button>`;
+  });
+  const ex=S.exam;
+  h+=`<button class="tile exam ${ex.done?'done':''}" data-act="exam">
+      <span class="no">${ex.done?'✓':'★'}</span>
+      <div style="min-width:0"><h3>Exam mode</h3><div class="sub">${ex.done?`Scored ${scoreExam()} / ${EXAM.length} — retake anytime`:'10 mixed questions across all worlds'}</div></div>
+      <div class="meta"><span class="bud">${EXAM_BUDGET} min</span></div>
+    </button>`;
+  h+=`</div>`;
+
+  h+=`<div class="row" style="margin-top:18px;justify-content:center">
+      <button class="btn sec sm" data-act="summary">End-of-day summary</button>
+      <button class="btn ghost sm" data-act="reset">Reset the day</button>
+    </div>`;
+  h+=`<div class="foot">Progress saves in this browser only. Close the tab during a break and pick up where you left off — same day.</div>`;
+  app.innerHTML=h;
+}
+
+function worldFlow(p){
+  if(p.fast)return[{k:"example"},{k:"boss"},{k:"done"}];
+  const f=[{k:"story"},{k:"example"}];
+  return f.concat([0,1,2,3,4,5].map(i=>({k:"ch",i})),[{k:"boss"},{k:"done"}]);
+}
+function renderWorld(){
+  const w=WORLDS[S.view.w-1];const p=wp(w.num);
+  const flow=worldFlow(p);
+  if(p.step>=flow.length)p.step=flow.length-1;
+  const node=flow[p.step];
+  const totalSteps=flow.length-1; // exclude 'done'
+  const pct=Math.min(100,Math.round(p.step/totalSteps*100));
+
+  let h=`<div class="row spread" style="margin-bottom:6px">
+      <button class="btn ghost sm" data-act="map">← Map</button>
+      <span class="pill acc">World ${w.num} · ${BUDGET[w.num-1]} min</span>
+    </div>`;
+  h+=`<div class="card">
+    <div class="whead">
+      <div style="flex:1;min-width:0">
+        <div class="qtag">World ${w.num}</div>
+        <h2>${esc(w.title)}</h2>
+        <div class="muted" style="font-size:13.5px">${esc(w.sub)}</div>
+      </div>
+      ${!p.fast?`<button class="btn sec sm" data-act="fast">⚡ Fast-track</button>`:`<span class="pill warn">⚡ Fast-track</span>`}
+    </div>`;
+
+  if(isBehind(w.num) && !p.done){
+    h+=`<div class="banner warn"><b>Behind the clock on this world.</b> ${p.fast?'Fast-track is on — worked example then boss.':'Try Fast-track to skip ahead to the boss.'}</div>`;
+  }
+  h+=`<div class="progressbar"><i style="width:${pct}%"></i></div>`;
+
+  if(node.k==="story"){
+    h+=`<div class="story" style="margin-top:14px">${w.story.map(p=>`<p>${p}</p>`).join("")}</div>`;
+    h+=navRow("Start the worked example →");
+  }else if(node.k==="example"){
+    const L=LESSONS[w.num];
+    h+=`<div class="qtag" style="margin-top:12px">Tutorial · ${esc(L.title)}</div>`;
+    h+=L.d;
+    h+=`<div class="formula">${L.f}</div>`;
+    h+=`<div class="qtag" style="margin-top:16px">Worked example</div>`;
+    h+=`<div style="margin-top:6px">${w.example.html}</div>`;
+    h+=navRow(p.fast?"Go to the boss →":"On to the challenges →");
+  }else if(node.k==="ch"){
+    h+=questionHtml(w.challenges[node.i],"ch"+node.i,w.num);
+  }else if(node.k==="boss"){
+    h+=questionHtml(w.boss,"boss",w.num,true);
+  }
+  h+=`</div>`;
+  app.innerHTML=h;
+  focusNum();
+}
+
+function teachHtml(worldNum,id,isBoss){
+  const L=LESSONS[worldNum];const w=WORLDS[worldNum-1];
+  const q=id==="boss"?w.boss:w.challenges[+id.slice(2)];
+  return `<div class="qtag" style="margin-top:14px;color:${isBoss?'var(--warn)':'var(--accent)'}">${isBoss?'★ Boss — refresh first':'Learn first'}${!isBoss&&q.tag?' · '+esc(q.tag):''}</div>
+    <div class="teach">
+      <div class="th">📖 ${esc(L.title)}</div>
+      ${L.d}
+      <div class="formula">${L.f}</div>
+      ${q.tip?`<div class="tip">${q.tip}</div>`:''}
+    </div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      <button class="btn" data-act="reveal" data-id="${id}" data-w="${worldNum}">I'm ready — test me →</button>
+    </div>`;
+}
+function questionHtml(q,id,worldNum,isBoss){
+  const p=wp(worldNum);
+  const res=id==="boss"?(p.bossDone?p.bossRes:null):p.results[id];
+  const answered=!!res;
+  const revealed=answered||(p.reveal&&p.reveal[id]);
+  if(!revealed)return teachHtml(worldNum,id,isBoss);
+  let h=`<div class="reminder">💡 ${LESSONS[worldNum].f}</div>`;
+  h+=`<div class="qtag" style="margin-top:14px;color:${isBoss?'var(--warn)':''}">${isBoss?'★ BOSS CHALLENGE':esc(q.tag||"Challenge")}</div>`;
+  h+=`<div class="qprompt">${q.prompt}</div>`;
+  if(q.render)h+=q.render;
+  if(q.type==="mc"){
+    h+=`<div class="choices">`;
+    q.choices.forEach((c,i)=>{
+      let cls="choice";
+      if(answered){
+        if(i===q.answer)cls+=" correct";
+        else if(i===res.pick)cls+=" wrong";
+      }
+      const letter=String.fromCharCode(65+i);
+      h+=`<button class="${cls}" data-act="answer" data-id="${id}" data-w="${worldNum}" data-pick="${i}" ${answered?'disabled':''}>
+        <span class="k">${letter}</span><span>${c}</span></button>`;
+    });
+    h+=`</div>`;
+  }else{
+    if(answered){
+      h+=`<div class="numin"><input value="${esc(res.pick)}" disabled></div>`;
+    }else{
+      h+=`<div class="numin"><input id="numInput" inputmode="decimal" placeholder="your answer" autocomplete="off">
+        <button class="btn" data-act="submitnum" data-id="${id}" data-w="${worldNum}">Check</button></div>`;
+    }
+  }
+  if(answered)h+=feedbackHtml(res.correct,q.explain)+navRow(isBoss?"Finish world →":"Next →");
+  return h;
+}
+function feedbackHtml(correct,explain){
+  return `<div class="feedback ${correct?'ok':'no'}">
+    <div class="hd">${correct?'✓ Correct':'✗ Not quite'}</div>
+    <div>${explain}</div></div>`;
+}
+function navRow(label){
+  return `<div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-act="next">${label}</button></div>`;
+}
+function focusNum(){const n=document.getElementById("numInput");if(n){n.focus();
+  n.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();
+    const btn=app.querySelector('[data-act="submitnum"]');if(btn)btn.click();}});}}
+
+function checkNum(val,q){
+  const x=parseFloat(String(val).replace(/[^0-9.\-]/g,""));
+  if(isNaN(x))return null;
+  return Math.abs(x-q.answer)<=(q.tol||0.01);
+}
+
+/* ---------- world completion ---------- */
+function completeWorld(w){
+  const p=wp(w.num);
+  if(!p.done){p.done=true;}
+  save();
+  // break after worlds 3 and 6
+  if((w.num===3||w.num===6) && !S.breaksShown[w.num]){
+    S.breaksShown[w.num]=true;
+    go("break",{after:w.num});
+  }else{
+    go("map");
+  }
+}
+
+/* ---------- exam ---------- */
+function scoreExam(){let s=0;EXAM.forEach((q,i)=>{const r=S.exam.results[i];if(r&&r.correct)s++;});return s;}
+function renderExam(){
+  const ex=S.exam;
+  if(!ex.started){
+    app.innerHTML=`<div class="row spread" style="margin-bottom:6px"><button class="btn ghost sm" data-act="map">← Map</button><span class="pill warn">Exam · ${EXAM_BUDGET} min</span></div>
+      <div class="card center">
+        <div class="bigemoji">★</div>
+        <h2 style="margin:6px 0">Exam mode</h2>
+        <p class="muted" style="max-width:48ch;margin:0 auto 4px">Ten mixed questions, one from each corner of the campaign. No story, no hints until you answer. You'll get a score and a review at the end.</p>
+        <div class="row" style="justify-content:center;margin-top:16px">
+          <button class="btn" data-act="examstart">Begin exam</button>
+        </div>
+      </div>`;
+    return;
+  }
+  if(ex.done){renderExamResult();return;}
+  const i=ex.idx;const q=EXAM[i];const res=ex.results[i];const answered=!!res;
+  const pct=Math.round(i/EXAM.length*100);
+  let h=`<div class="row spread" style="margin-bottom:6px"><button class="btn ghost sm" data-act="map">← Map</button><span class="pill warn">Question ${i+1} / ${EXAM.length}</span></div>
+    <div class="card">
+      <div class="progressbar" style="margin-top:0"><i style="width:${pct}%"></i></div>
+      <div class="qtag" style="margin-top:12px">${esc(q.tag)} · mixed exam</div>
+      <div class="qprompt">${q.prompt}</div>`;
+  if(q.type==="mc"){
+    h+=`<div class="choices">`;
+    q.choices.forEach((c,ci)=>{let cls="choice";
+      if(answered){if(ci===q.answer)cls+=" correct";else if(ci===res.pick)cls+=" wrong";}
+      h+=`<button class="${cls}" data-act="examans" data-i="${i}" data-pick="${ci}" ${answered?'disabled':''}><span class="k">${String.fromCharCode(65+ci)}</span><span>${c}</span></button>`;});
+    h+=`</div>`;
+  }else{
+    if(answered)h+=`<div class="numin"><input value="${esc(res.pick)}" disabled></div>`;
+    else h+=`<div class="numin"><input id="numInput" inputmode="decimal" placeholder="your answer" autocomplete="off"><button class="btn" data-act="examnum" data-i="${i}">Check</button></div>`;
+  }
+  if(answered)h+=feedbackHtml(res.correct,q.explain)+`<div class="row" style="margin-top:16px;justify-content:flex-end"><button class="btn" data-act="examnext">${i+1<EXAM.length?'Next →':'See results →'}</button></div>`;
+  h+=`</div>`;
+  app.innerHTML=h;focusNum();
+}
+function renderExamResult(){
+  const s=scoreExam();const total=EXAM.length;const pctN=Math.round(s/total*100);
+  const wrongs=EXAM.map((q,i)=>({q,i,r:S.exam.results[i]})).filter(x=>x.r&&!x.r.correct);
+  let h=`<div class="row spread" style="margin-bottom:6px"><button class="btn ghost sm" data-act="map">← Map</button><span class="pill warn">Exam complete</span></div>
+    <div class="card center">
+      <div class="bigemoji">${pctN>=80?'🏆':pctN>=50?'✓':'📘'}</div>
+      <h2 style="margin:6px 0">${s} / ${total} correct</h2>
+      <p class="muted">${pctN>=80?'Mastery — you know the convolution machine cold.':pctN>=50?'Solid. Review the misses below and you\'re there.':'Worth another pass through the weaker worlds.'}</p>
+    </div>`;
+  if(wrongs.length){
+    h+=`<div class="card"><div class="qtag">Review your misses</div><div class="wronglist" style="margin-top:12px">`;
+    wrongs.forEach(({q,r})=>{
+      const yours=q.type==="mc"?q.choices[r.pick]:r.pick;
+      const sol=q.type==="mc"?q.choices[q.answer]:q.answer;
+      h+=`<div class="wrongitem"><div class="q">${q.prompt}</div>
+        <div class="ln yours">Your answer: ${esc(yours)}</div>
+        <div class="ln sol">Correct: ${esc(sol)}</div>
+        <div class="ln muted">${q.explain}</div></div>`;
+    });
+    h+=`</div></div>`;
+  }
+  h+=`<div class="row" style="margin-top:16px;justify-content:center">
+      <button class="btn sec" data-act="examretake">Retake exam</button>
+      <button class="btn" data-act="summary">End-of-day summary</button>
+    </div>`;
+  app.innerHTML=h;
+}
+
+/* ---------- break ---------- */
+function renderBreak(){
+  const after=S.view.after;
+  const fs=unlockedFormulas();const fl=unlockedFilters();
+  let h=`<div class="card center">
+    <div class="bigemoji">☕</div>
+    <h2 style="margin:6px 0">Take 10 minutes</h2>
+    <p class="muted" style="max-width:46ch;margin:0 auto">You've cleared ${after} of 8 worlds. Step away — the clock pauses while you're on this screen, and your progress is saved. Here's everything so far on one screen.</p>
+  </div>`;
+  h+=`<div class="card"><div class="qtag">Recap · formulas unlocked</div><div style="margin-top:10px">`;
+  fs.forEach(({w,f})=>{h+=`<div class="formula"><span class="muted" style="font-size:11px;font-family:Inter">W${w}</span><br>${f.t}<span class="n">${f.n}</span></div>`;});
+  h+=`</div><div class="qtag" style="margin-top:14px">Filters in your kit</div><div class="unlock">${fl.map(f=>`<span class="chip f">${esc(f)}</span>`).join("")}</div></div>`;
+  h+=`<div class="row" style="margin-top:16px;justify-content:center"><button class="btn" data-act="map">I'm back — continue</button></div>`;
+  app.innerHTML=h;
+}
+
+/* ---------- summary ---------- */
+function renderSummary(){
+  const fs=unlockedFormulas();const fl=unlockedFilters();
+  const wrongs=Object.values(S.wrong);
+  let h=`<div class="row spread noprint" style="margin-bottom:10px">
+      <button class="btn ghost sm" data-act="map">← Map</button>
+      <span class="muted" style="font-size:12px">Use your browser's Print (⌘/Ctrl-P) to print or save this page</span>
+    </div>`;
+  h+=`<div class="card">
+      <h2 style="margin:0 0 4px">Kernel Quest — day summary</h2>
+      <div class="muted">${new Date().toLocaleDateString(undefined,{weekday:"long",year:"numeric",month:"long",day:"numeric"})}</div>
+      <div class="row" style="margin-top:12px">
+        <span class="pill good">${completedCount()} / 8 worlds cleared</span>
+        <span class="pill acc">${fmtT(S.active)} active</span>
+        ${S.exam.done?`<span class="pill">Exam ${scoreExam()} / ${EXAM.length}</span>`:`<span class="pill">Exam not taken</span>`}
+      </div>
+    </div>`;
+
+  h+=`<div class="card sumsec"><h3>📐 Formulas unlocked</h3>`;
+  if(fs.length)fs.forEach(({w,f})=>{h+=`<div class="formula"><span class="muted" style="font-size:11px;font-family:Inter">World ${w}</span><br>${f.t}<span class="n">${f.n}</span></div>`;});
+  else h+=`<p class="muted">Clear a world to unlock its formulas.</p>`;
+  h+=`</div>`;
+
+  h+=`<div class="card sumsec"><h3>🧰 Filters you can name</h3>`;
+  if(fl.length)h+=`<div class="unlock">${fl.map(f=>`<span class="chip f">${esc(f)}</span>`).join("")}</div>`;
+  else h+=`<p class="muted">No filters unlocked yet.</p>`;
+  h+=`</div>`;
+
+  h+=`<div class="card sumsec"><h3>✗ Questions you missed — with solutions</h3>`;
+  if(wrongs.length){
+    h+=`<div class="wronglist">`;
+    wrongs.forEach(wobj=>{
+      h+=`<div class="wrongitem">
+        <div class="q"><span class="muted" style="font-size:11px">${esc(wobj.src)}</span><br>${wobj.prompt}</div>
+        <div class="ln yours">Your answer: ${esc(wobj.your)}</div>
+        <div class="ln sol">Correct: ${esc(wobj.correct)}</div>
+        <div class="ln muted">${wobj.explain}</div>
+      </div>`;
+    });
+    h+=`</div>`;
+  }else h+=`<p class="muted">Nothing missed yet — clean run so far.</p>`;
+  h+=`</div>`;
+  h+=`<div class="foot">Kernel Quest · one-day image-convolution campaign</div>`;
+  app.innerHTML=h;
+}
+
+/* ---------- record wrong answers ---------- */
+function recordWrong(key,src,prompt,your,correct,explain){
+  S.wrong[key]={src,prompt,your:String(your),correct:String(correct),explain};
+}
+
+/* ---------- event handling ---------- */
+app.addEventListener("click",e=>{
+  const t=e.target.closest("[data-act]");if(!t)return;
+  const act=t.dataset.act;
+  if(act==="map")return go("map");
+  if(act==="world"){const num=+t.dataset.w;go("world",{w:num});return;}
+  if(act==="summary")return go("summary");
+  if(act==="reset"){S=freshState();save();go("map");return;}
+  if(act==="exam"){go("exam");return;}
+  if(act==="fast"){const w=WORLDS[S.view.w-1];const p=wp(w.num);p.fast=true;p.step=0;save();render();return;}
+  if(act==="reveal"){const num=+t.dataset.w;const p=wp(num);p.reveal[t.dataset.id]=true;save();render();return;}
+  if(act==="next"){nextStep();return;}
+  if(act==="answer"){answerMC(t);return;}
+  if(act==="submitnum"){answerNum(t);return;}
+  if(act==="examstart"){S.exam.started=true;S.exam.idx=0;S.exam.done=false;S.exam.results={};save();render();return;}
+  if(act==="examretake"){S.exam.started=true;S.exam.idx=0;S.exam.done=false;S.exam.results={};save();render();return;}
+  if(act==="examans"){examAnswer(+t.dataset.i,+t.dataset.pick);return;}
+  if(act==="examnum"){const i=+t.dataset.i;const inp=document.getElementById("numInput");examAnswerNum(i,inp?inp.value:"");return;}
+  if(act==="examnext"){if(S.exam.idx+1<EXAM.length){S.exam.idx++;}else{S.exam.done=true;}save();render();return;}
+});
+
+function nextStep(){
+  const w=WORLDS[S.view.w-1];const p=wp(w.num);const flow=worldFlow(p);
+  if(flow[p.step].k==="boss"){completeWorld(w);return;}
+  p.step++;save();
+  if(flow[p.step]&&flow[p.step].k==="done"){completeWorld(w);return;}
+  render();
+}
+function answerMC(t){
+  const w=WORLDS[S.view.w-1];const id=t.dataset.id;const pick=+t.dataset.pick;
+  const p=wp(w.num);
+  const q=id==="boss"?w.boss:w.challenges[+id.slice(2)];
+  const correct=pick===q.answer;
+  const res={pick,correct};
+  if(id==="boss"){p.bossDone=true;p.bossRes=res;}else{p.results[id]=res;}
+  if(!correct)recordWrong("w"+w.num+"_"+id,"World "+w.num+" · "+(id==="boss"?"Boss":q.tag),q.prompt.replace(/<[^>]+>/g,""),q.choices[pick],q.choices[q.answer],q.explain);
+  save();render();
+}
+function answerNum(t){
+  const w=WORLDS[S.view.w-1];const id=t.dataset.id;const p=wp(w.num);
+  const q=id==="boss"?w.boss:w.challenges[+id.slice(2)];
+  const inp=document.getElementById("numInput");const val=inp?inp.value:"";
+  const ok=checkNum(val,q);
+  if(ok===null){inp.focus();return;}
+  const res={pick:val,correct:ok};
+  if(id==="boss"){p.bossDone=true;p.bossRes=res;}else{p.results[id]=res;}
+  if(!ok)recordWrong("w"+w.num+"_"+id,"World "+w.num+" · "+(id==="boss"?"Boss":q.tag),q.prompt.replace(/<[^>]+>/g,""),val,q.answer,q.explain);
+  save();render();
+}
+function examAnswer(i,pick){
+  const q=EXAM[i];const correct=pick===q.answer;
+  S.exam.results[i]={pick,correct};
+  if(!correct)recordWrong("ex"+i,"Exam · "+q.tag,q.prompt,q.choices[pick],q.choices[q.answer],q.explain);
+  save();render();
+}
+function examAnswerNum(i,val){
+  const q=EXAM[i];const ok=checkNum(val,q);if(ok===null){const inp=document.getElementById("numInput");if(inp)inp.focus();return;}
+  S.exam.results[i]={pick:val,correct:ok};
+  if(!ok)recordWrong("ex"+i,"Exam · "+q.tag,q.prompt,val,q.answer,q.explain);
+  save();render();
+}
+
+/* ---------- boot ---------- */
+render();
+</script>
